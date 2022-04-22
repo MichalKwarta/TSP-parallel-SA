@@ -22,23 +22,23 @@ void SA::apply()
 	float nextCost;
 	float bestCost = currentCost;
 
-	for (temperature = initialTemperature; temperature >= TEMP_LIMIT; temperature *= coolingRate)
+	for (temperature = initialTemperature; temperature >= 0.01; temperature *= coolingRate)
 	{
+		int steps = 400 * size;
 
-		for (int i = 0; i < STEPS; i++)
+		for (int i = 0; i < steps; i++)
 
 		{
 			next = current;
-			firstToSwap = rand() % size;
-
 			do
 			{
 
+				firstToSwap = rand() % size;
 				secondToSwap = rand() % size;
 			} while (firstToSwap == secondToSwap);
 
-			// std::swap(next[firstToSwap], next[secondToSwap]);
-			std::reverse(next.begin() + firstToSwap, next.begin() + secondToSwap);
+			std::swap(next[firstToSwap], next[secondToSwap]);
+
 			nextCost = costFunction(next);
 
 			double difference = currentCost - nextCost;
@@ -66,6 +66,12 @@ void SA::apply()
 		}
 	}
 
+	// std::cout << "Droga: ";
+	// for (int d = 0; d < size; d++)
+	// {
+	// 	std::cout << best[d] << " ";
+	// }
+
 	std::cout << bestCost << std::endl;
 
 	std::cout << std::endl;
@@ -76,41 +82,40 @@ void SA::parallelApply()
 	srand(time(NULL));
 	std::vector<int> current = greedy();
 	float currentCost = costFunction(current);
-	int WORKERS = 4;
-	omp_set_num_threads(WORKERS);
+
 	std::vector<int> next(current);
 	std::vector<int> best(current);
-	std::vector<std::vector<int>> workersPaths(WORKERS, current);
-	std::vector<float> workersCosts(WORKERS,currentCost);
-	std::vector<float> workersBest(WORKERS,currentCost);
+	int WORKERS = 4;
+	std::vector<std::vector<int>> threadResults(WORKERS, std::vector<int>(size));
 
-
+	int firstToSwap;
+	int secondToSwap;
 	double temperature = initialTemperature;
 	float nextCost;
-
 	float bestCost = currentCost;
-	int firstToSwap,secondToSwap;
 
-	for (temperature = initialTemperature; temperature >= TEMP_LIMIT; temperature *= coolingRate)
+	for (temperature = initialTemperature; temperature >= 0.01; temperature *= coolingRate)
 	{
-		#pragma omp parallel private(current,currentCost,firstToSwap, secondToSwap, next, nextCost) firstprivate(matrix)
+		int steps = 100 * size;
+
+
+		#pragma omp parallel for private(firstToSwap, secondToSwap, next, nextCost) shared(steps,threadResults) firstprivate(current)
+
+		for (size_t worker = 0; worker < WORKERS; worker++)
 		{
-			current = workersPaths[omp_get_thread_num()];
-			currentCost = workersCosts[omp_get_thread_num()];
-			bestCost = workersBest[omp_get_thread_num()];
-			#pragma omp for schedule(dynamic) nowait
-			for (int i = 0; i < STEPS; i++)
+
+			for (int i = 0; i < steps; i++)
+
 			{
 				next = current;
-				firstToSwap = rand() % size;
-
 				do
 				{
+
+					firstToSwap = rand() % size;
 					secondToSwap = rand() % size;
 				} while (firstToSwap == secondToSwap);
 
-				// std::swap(next[firstToSwap], next[secondToSwap]);
-				std::reverse(next.begin() + firstToSwap, next.begin() + secondToSwap);
+				std::swap(next[firstToSwap], next[secondToSwap]);
 
 				nextCost = costFunction(next);
 
@@ -118,13 +123,8 @@ void SA::parallelApply()
 
 				if (currentCost >= nextCost)
 				{
-
 					current = next;
 					currentCost = nextCost;
-					if (nextCost <= bestCost)
-					{
-						bestCost = nextCost;
-					}
 				}
 				else
 				{
@@ -133,27 +133,42 @@ void SA::parallelApply()
 					{
 						current = next;
 						currentCost = nextCost;
+						// break;
 					}
 				}
 			}
-
-			workersPaths[omp_get_thread_num()] = current;
-			workersCosts[omp_get_thread_num()] = currentCost;
-			workersBest[omp_get_thread_num()] = bestCost;
+			threadResults[worker] = current;
 		}
 
+		current = threadResults[0];
+		currentCost = costFunction(threadResults[0]);
 
+		for (int i = 1; i < threadResults.size(); i++)
+		{
+			if (costFunction(threadResults[i]) < bestCost)
+			{
+				best = threadResults[i];
+				bestCost = costFunction(threadResults[i]);
+			}
+
+		}
 	}
-	for (int i = 0; i < WORKERS; i++)
-	{
-		std::cout << workersCosts[i] << std::endl;
-	}
-	std::cout <<*std::min_element(workersBest.begin(),workersBest.end()) << std::endl;
+
+	// std::cout << "Droga: ";
+	// for (int d = 0; d < size; d++)
+	// {
+	// 	std::cout << best[d] << " ";
+	// }
+
+	std::cout << bestCost << std::endl;
+
+	std::cout << std::endl;
 }
 
 float SA::costFunction(std::vector<int> path)
 {
 	float cost = 0;
+
 	for (int i = 0; i < path.size() - 1; ++i)
 	{
 		cost += matrix[path[i]][path[i + 1]];

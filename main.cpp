@@ -10,18 +10,16 @@ int main(int argc, char * argv[])
     float coolingRate;
     int temperature;
     std::string fname;
-
-    if (argc == 4)
+    int runMP;
+    if (argc == 3)
     {
+        runMP = atoi(argv[2]);
         fname = argv[1];
-        temperature = atoi(argv[2]);
-        coolingRate = atof(argv[3]);
     }
     // char filename[] = "data/berlin52.txt";
     else{
     fname = "data/berlin52.txt";
-    temperature = 500;
-    coolingRate = 0.999;
+    
     }
         std::fstream myfile(fname, std::ios_base::in);
 
@@ -51,10 +49,23 @@ int main(int argc, char * argv[])
             float distance = sqrt(pow(XValues[i] - XValues[j], 2) + pow(YValues[i] - YValues[j], 2));
             matrix[i][j] = (i==j)?0:distance;
         }
-    }
+    }   
+
+    temperature = 1000;
+    coolingRate = 0.99;
 
     SA sa = SA(matrix, size, temperature, coolingRate );
-    sa.apply();
+    if (runMP == 1)
+
+    {
+        std::cout<<"Running in parallel"<<std::endl;
+        sa.parallelApply();
+    }
+    else
+    {
+        std::cout<<"Running in serial"<<std::endl;
+        sa.apply();
+    }
     
     free(matrix);
 
