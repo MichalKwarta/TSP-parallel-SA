@@ -74,13 +74,17 @@ void SA::apply()
 void SA::parallelApply()
 {
 	srand(time(NULL));
-	std::vector<int> current = greedy();
+	std::vector<int> tmpcurrent = greedy();
+	std::vector<char> current;
+	for (int i = 0; i < tmpcurrent.size(); i++)
+	{
+		current.push_back((char)(tmpcurrent[i]+'0'));
+	}
 	float currentCost = costFunction(current);
-	int WORKERS = 4;
 	omp_set_num_threads(WORKERS);
-	std::vector<int> next(current);
-	std::vector<int> best(current);
-	std::vector<std::vector<int>> workersPaths(WORKERS, current);
+	std::vector<char> next(current);
+	std::vector<char> best(current);
+	std::vector<std::vector<char>> workersPaths(WORKERS, current);
 	std::vector<float> workersCosts(WORKERS,currentCost);
 	std::vector<float> workersBest(WORKERS,currentCost);
 
@@ -144,10 +148,10 @@ void SA::parallelApply()
 
 
 	}
-	for (int i = 0; i < WORKERS; i++)
-	{
-		std::cout << workersCosts[i] << std::endl;
-	}
+	// for (int i = 0; i < WORKERS; i++)
+	// {
+	// 	std::cout << workersCosts[i] << std::endl;
+	// }
 	std::cout <<*std::min_element(workersBest.begin(),workersBest.end()) << std::endl;
 }
 
@@ -159,6 +163,17 @@ float SA::costFunction(std::vector<int> path)
 		cost += matrix[path[i]][path[i + 1]];
 	}
 	cost += matrix[path[size - 1]][path[0]];
+
+	return cost;
+}
+float SA::costFunction(std::vector<char> path)
+{
+	float cost = 0;
+	for (int i = 0; i < path.size() - 1; ++i)
+	{
+		cost += matrix[path[i]-'0'][path[i + 1]-'0'];
+	}
+	cost += matrix[path[size - 1]-'0'][path[0]-'0'];
 
 	return cost;
 }
