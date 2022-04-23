@@ -76,7 +76,6 @@ void SA::parallelApply()
 	srand(time(NULL));
 	std::vector<int> current = greedy();
 	float currentCost = costFunction(current);
-	int WORKERS = 4;
 	omp_set_num_threads(WORKERS);
 	std::vector<int> next(current);
 	std::vector<int> best(current);
@@ -88,13 +87,15 @@ void SA::parallelApply()
 	double temperature = initialTemperature;
 	float nextCost;
 
+
+
 	float bestCost = currentCost;
 	int firstToSwap,secondToSwap;
-
+	#pragma omp parallel private(current,currentCost,firstToSwap, secondToSwap, next, nextCost) firstprivate(matrix)
+		{
 	for (temperature = initialTemperature; temperature >= TEMP_LIMIT; temperature *= coolingRate)
 	{
-		#pragma omp parallel private(current,currentCost,firstToSwap, secondToSwap, next, nextCost) firstprivate(matrix)
-		{
+		
 			current = workersPaths[omp_get_thread_num()];
 			currentCost = workersCosts[omp_get_thread_num()];
 			bestCost = workersBest[omp_get_thread_num()];
@@ -144,10 +145,7 @@ void SA::parallelApply()
 
 
 	}
-	for (int i = 0; i < WORKERS; i++)
-	{
-		std::cout << workersCosts[i] << std::endl;
-	}
+
 	std::cout <<*std::min_element(workersBest.begin(),workersBest.end()) << std::endl;
 }
 
@@ -189,12 +187,13 @@ std::vector<int> SA::greedy()
 	return path;
 }
 
-SA::SA(float **matrixarg, int sizearg, int temp, double rate)
+SA::SA(float **matrixarg, int sizearg, int temp, double rate,int workers)
 {
 	matrix = matrixarg;
 	size = sizearg;
 	coolingRate = rate;
 	initialTemperature = temp;
+	WORKERS = workers;
 }
 
 SA::~SA()

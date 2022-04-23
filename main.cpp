@@ -11,15 +11,17 @@ int main(int argc, char * argv[])
     int temperature;
     std::string fname;
     int runMP;
-    if (argc == 3)
+    int WORKERS;
+    if (argc == 4)
     {
+        WORKERS = atoi(argv[3]);
         runMP = atoi(argv[2]);
         fname = argv[1];
     }
     // char filename[] = "data/berlin52.txt";
     else{
-    fname = "data/berlin52.txt";
-    
+        WORKERS = 1;
+        fname = "data/berlin52.txt";
     }
         std::fstream myfile(fname, std::ios_base::in);
 
@@ -54,7 +56,7 @@ int main(int argc, char * argv[])
     temperature = 1000;
     coolingRate = 0.99;
 
-    SA sa = SA(matrix, size, temperature, coolingRate );
+    SA sa = SA(matrix, size, temperature, coolingRate,WORKERS );
     if (runMP == 1)
 
     {
