@@ -1,4 +1,4 @@
-#include "SA.h"
+#include "SA_MP.h"
 #include <vector>
 #include <algorithm>
 #include <time.h>
@@ -7,69 +7,6 @@
 #include <ctime>
 #include <omp.h>
 
-void SA::apply()
-{
-	srand(time(NULL));
-	std::vector<int> current = greedy();
-	float currentCost = costFunction(current);
-
-	std::vector<int> next(current);
-	std::vector<int> best(current);
-
-	int firstToSwap;
-	int secondToSwap;
-	double temperature = initialTemperature;
-	float nextCost;
-	float bestCost = currentCost;
-
-	for (temperature = initialTemperature; temperature >= TEMP_LIMIT; temperature *= coolingRate)
-	{
-
-		for (int i = 0; i < STEPS; i++)
-
-		{
-			next = current;
-			firstToSwap = rand() % size;
-
-			do
-			{
-
-				secondToSwap = rand() % size;
-			} while (firstToSwap == secondToSwap);
-
-			// std::swap(next[firstToSwap], next[secondToSwap]);
-			std::reverse(next.begin() + firstToSwap, next.begin() + secondToSwap);
-			nextCost = costFunction(next);
-
-			double difference = currentCost - nextCost;
-
-			if (currentCost >= nextCost)
-			{
-				current = next;
-				currentCost = nextCost;
-
-				if (nextCost < bestCost)
-				{
-					bestCost = nextCost;
-				}
-			}
-			else
-			{
-
-				if (exp((currentCost - nextCost) / temperature) > (float)rand() / RAND_MAX)
-				{
-					current = next;
-					currentCost = nextCost;
-					// break;
-				}
-			}
-		}
-	}
-
-	std::cout << bestCost << std::endl;
-
-	std::cout << std::endl;
-}
 
 void SA::parallelApply()
 {
@@ -93,12 +30,15 @@ void SA::parallelApply()
 	int firstToSwap,secondToSwap;
 	#pragma omp parallel private(current,currentCost,firstToSwap, secondToSwap, next, nextCost) firstprivate(matrix)
 		{
+		int threadID = omp_get_thread_num();
 	for (temperature = initialTemperature; temperature >= TEMP_LIMIT; temperature *= coolingRate)
 	{
-		
-			current = workersPaths[omp_get_thread_num()];
-			currentCost = workersCosts[omp_get_thread_num()];
-			bestCost = workersBest[omp_get_thread_num()];
+			
+
+
+			current = workersPaths[threadID];
+			currentCost = workersCosts[threadID];
+			bestCost = workersBest[threadID];
 			#pragma omp for schedule(dynamic) nowait
 			for (int i = 0; i < STEPS; i++)
 			{
@@ -110,7 +50,7 @@ void SA::parallelApply()
 					secondToSwap = rand() % size;
 				} while (firstToSwap == secondToSwap);
 
-				// std::swap(next[firstToSwap], next[secondToSwap]);
+
 				std::reverse(next.begin() + firstToSwap, next.begin() + secondToSwap);
 
 				nextCost = costFunction(next);
@@ -138,9 +78,9 @@ void SA::parallelApply()
 				}
 			}
 
-			workersPaths[omp_get_thread_num()] = current;
-			workersCosts[omp_get_thread_num()] = currentCost;
-			workersBest[omp_get_thread_num()] = bestCost;
+			workersPaths[threadID] = current;
+			workersCosts[threadID] = currentCost;
+			workersBest[threadID] = bestCost;
 		}
 
 
@@ -187,12 +127,11 @@ std::vector<int> SA::greedy()
 	return path;
 }
 
-SA::SA(float **matrixarg, int sizearg, int temp, double rate,int workers)
+SA::SA(float **matrixarg, int sizearg,int workers)
 {
 	matrix = matrixarg;
 	size = sizearg;
-	coolingRate = rate;
-	initialTemperature = temp;
+
 	WORKERS = workers;
 }
 

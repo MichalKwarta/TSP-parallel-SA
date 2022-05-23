@@ -10,17 +10,12 @@ int main(int argc, char * argv[])
     float coolingRate;
     int temperature;
     std::string fname;
-    int runMP;
-    int WORKERS;
-    if (argc == 4)
+    if (argc == 2)
     {
-        WORKERS = atoi(argv[3]);
-        runMP = atoi(argv[2]);
         fname = argv[1];
     }
     // char filename[] = "data/berlin52.txt";
     else{
-        WORKERS = 1;
         fname = "data/berlin52.txt";
     }
         std::fstream myfile(fname, std::ios_base::in);
@@ -53,21 +48,11 @@ int main(int argc, char * argv[])
         }
     }   
 
-    temperature = 1000;
-    coolingRate = 0.99;
 
-    SA sa = SA(matrix, size, temperature, coolingRate,WORKERS );
-    if (runMP == 1)
-
-    {
-        std::cout<<"Running in parallel"<<std::endl;
-        sa.parallelApply();
-    }
-    else
-    {
-        std::cout<<"Running in serial"<<std::endl;
-        sa.apply();
-    }
+    SA sa = SA(matrix, size );
+   
+    std::cout<<"Running in serial"<<std::endl;
+    sa.apply();
     
     free(matrix);
 
