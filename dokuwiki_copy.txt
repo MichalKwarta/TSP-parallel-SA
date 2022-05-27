@@ -100,11 +100,90 @@ def sequential(pixelMatrix,mask=None,grayLevels = 256) -> np.ndarray:
   * Schemat strategii dzielenia się pracą: Każdy wątek relizuje mniejsze wyżarzanie niezależnie (pętla wewnętrzna ma ilość iteracji STEPS/Ilość wątków)
   * Schemat dekompozycji i agregacji strumieni danych : Każdy wątek losuje pierwszą ścieżkę, a następnie po wyjśćiu z omp parallel wybierana jest najlepsza wartość.
 
+  * **CUDA**
+  * Dane: Jak w wersji sekwencyjnej
+  * Główne kroki algorytmu:
+  1. Wywołanie kernela zliczającego wystąpienia pikseli w takiej konfiguracji, że każdy wątek odpowiada jednemu pikselowi w gridzie. Ten kernel dodaje atomowo 1 na odpowiedniej pozycji w liście occurencies
+<code python>
+  @cuda.jit(fastmath = True)
+  def countOccurencies(pixelsMatrix,occurencies,mask):
+      x,y = cuda.grid(2)
+      if x>=pixelsMatrix.shape[0] or y>=pixelsMatrix.shape[1]:
+          return
+      if mask[x][y] == 1:
+          return
+      cuda.atomic.add(occurencies,pixelsMatrix[x][y],1)
+</code>
+2. Wywołanie kernela tworzącego skumulowaną funkcję rozkładu tzn. lista cdf początkowo to lista zer o długości równej ilości stopni szarości. Każdemu indeksowi odpowiada jeden wątek.
+
+<code python> 
+@cuda.jit(fastmath = True)
+def calcCDF(occurencies_d,cdf):  # sourcery skip: sum-comprehension
+    acc = 0
+    for i in range(cuda.grid(1)+1):
+        acc+=occurencies_d[i]
+    cdf[cuda.grid(1)] = acc
+  </code>
+3.Wywołanie kernela do wyliczenia transformacji h(w formie lookup table) tak samo jak cdf, wątek na każdy indeks
+<code python>
+@cuda.jit(fastmath = True)
+def calcH(h,cdf_d,cdfmin_d,size_d,grayLevels_d):
+    nominator = (cdf_d[cuda.grid(1)]-nb.int32(cdfmin_d))
+
+    denominator = (size_d-cdfmin_d)
+    multiplier = (grayLevels_d-1)
+    result = round(nominator/denominator*multiplier)
+
+    h[cuda.grid(1)] = result
+</code>
+4. Wywołanie kernela do nadpisania wartości oryginalnej macierzy - wątek na kazdy piksel 
+<code python>
+@cuda.jit(fastmath=True)
+def changeOriginalValues(h_d,pixelsMatrix,mask):
+    x,y = cuda.grid(2)
+    if x>=pixelsMatrix.shape[0] or y>=pixelsMatrix.shape[1]:
+        return
+    if mask[x][y] == 1:
+        return
+    pixelsMatrix[x][y] = nb.int32( h_d[pixelsMatrix[x][y]] )
+</code>
+
+Kod głównej funkcji
+
+<code python>
+   def parallel(pixelsMatrix,mask,grayLevels = 256):
+      H,W = pixelsMatrix.shape
+      blockdim = (32, 32)
+      mask_d = cuda.to_device(mask)
+      griddim = (H // blockdim[0] + 1,W // blockdim[1] + 1)
+      occurencies = np.zeros(grayLevels,np.int32)
+      pixelsMatrix = pixelsMatrix.astype(np.int32)
+      pixelsMatrix_d = cuda.to_device(pixelsMatrix)
+      del pixelsMatrix
+      occurencies_d = cuda.to_device(occurencies)
+      countOccurencies[griddim,blockdim](pixelsMatrix_d,occurencies_d,mask_d)
+      cdf = np.zeros(grayLevels,np.int32)
+      cdf_d = cuda.to_device(cdf)
+      threadsperblock = 32
+      blockspergrid = (grayLevels + (threadsperblock - 1)) // threadsperblock
+      calcCDF[threadsperblock,blockspergrid](occurencies_d,cdf_d)
+      del occurencies_d
+      cdfmin = next((x for x in cdf_d if x),-1)
+      h = np.zeros(grayLevels,np.int32)
+      h_d = cuda.to_device(h)
+      calcH[threadsperblock,blockspergrid](h_d,cdf_d,nb.int32(cdfmin),nb.int32(H*W),nb.int32(grayLevels))
+      del cdfmin
+      del cdf_d
+      changeOriginalValues[griddim,blockdim](h_d,pixelsMatrix_d,mask_d)
+      del h_d
+      return pixelsMatrix_d
+</code>
+
+
 
 ==== Kody programów ====
   * Link do repozytorium: https://github.com/MichalKwarta/TSP-parallel-SA (zawiera równiez projekt z CUDA)
   * Kompilacja: Do repozytorium dołączony jest makefile, jednakże do testów wszystkie kody były kompilowane z poziomem optymalizacji O3.
-  * Kod CUDA dla numby, jest zbyt rozległy żeby go tutaj wklejać, z tego powodu, że każdy etap algorytmu jest osobnym kernelem. Jednak wydaje mi się, że należy skomentować co robic cuda.grid(n) - zwraca globalny indeks wątku, jeśli uzywamy 2 wymiarowego grida, to cuda.grid(2) zwróci pozycję w gridzie.  Przesyłanie danych z hosta to device można robić manualnie, jednak nie jest koniecznie - numba wypisze warning, że może to skutkować narzutem czasowym. W drugą stronę jednak odbywa się "samo" - numba nie oferuje funckji do transferu z gpu do cpu.
 
 
 
@@ -124,6 +203,9 @@ Numba używa JiT, a więc pierwsze uruchomienie funkcji trwa znacznie dłużej z
 ==== Pomiary czasu ====
  * **OPENMP**
  * Dummy10 jest sztucznie wygenerowaną instancją, która miała na celu sprawdzić, jak zachowuje się kod w przypadku bardzo małej instancji.
+ Liczba w nazwie instancji oznacza ilość wierzchołkóœ w grafie.
+ Instancja definuje współrzędne x i y miasta - z dowolnego miasta da sie dostać do wszystkich pozostałych bezpośrednio
+
 
 
 
