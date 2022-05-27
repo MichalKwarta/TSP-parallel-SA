@@ -50,15 +50,15 @@ def generate_dummy_mask(matrix:np.ndarray,threshold = 200):
 
 
 
-
-if __name__ == '__main__':
-    img = Image.open(sys.argv[1]).convert('L')
-    pixelMatrix = np.array(img)
-    mask = generate_dummy_mask(pixelMatrix)
+def benchmark(file,iters):
     times = []
-    for _ in range(10):
+    filename = np.array(Image.open(file).convert('L'))
+    mask = generate_dummy_mask(filename)
+
+    for _ in range(iters):
+
         start= time.time()
-        par = sequential(pixelMatrix,mask)
+        seq = sequential(filename,mask)
         end = time.time()
         times.append(round(end-start,3))
-    print(times)
+    return times

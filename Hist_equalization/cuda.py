@@ -52,7 +52,10 @@ def calcH(h,cdf_d,cdfmin_d,size_d,grayLevels_d):
     h[cuda.grid(1)] = result
     # print("XD")
 
-@cuda.jit(fastmath = True)
+
+
+
+@cuda.jit(fastmath=True)
 def changeOriginalValues(h_d,pixelsMatrix,mask):
     x,y = cuda.grid(2)
     if x>=pixelsMatrix.shape[0] or y>=pixelsMatrix.shape[1]:
@@ -63,6 +66,8 @@ def changeOriginalValues(h_d,pixelsMatrix,mask):
 
 
 
+            
+        
 
 
 def parallel(pixelsMatrix,mask,grayLevels = 256):
@@ -103,17 +108,17 @@ def parallel(pixelsMatrix,mask,grayLevels = 256):
     return pixelsMatrix_d
 
 
-if __name__ == '__main__':
+
+def benchmark(file,iters):
     times = []
-    fnames = ['bigbig.png']
-    for _ in range(10):
-        rand_name = random.choice(fnames)
-        fxd = np.array(Image.open(rand_name).convert('L'))
-        mask = generate_dummy_mask(fxd)
+    filename = np.array(Image.open(file).convert('L'))
+    mask = generate_dummy_mask(filename)
+
+    for _ in range(iters):
 
         start= time.time()
-        par = parallel(fxd,mask)
-        cuda.synchronize()
+        par = parallel(filename,mask)
         end = time.time()
-        times.append((rand_name,round(end-start,3)))
-    print(times)
+        times.append(round(end-start,3))
+    return times
+    
