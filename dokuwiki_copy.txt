@@ -1,0 +1,163 @@
+** Sprawozdanie w trakcie pisania **
+==== Projekt: Symulowane wyżarzanie dla TSP(OpenMP) | Wyrównywanie histogramów z maską(CUDA)====
+
+^ Data ^ Status projektu    ^ Uwagi ^
+|2022-04-20|Wybór tematu OpenMP  ||
+|2022-05-25|Wybór tematu CUDA ||
+|2022-05-27|Wrzucenie sprawozdań ||
+
+----
+
+==== Streszczenie ====
+  * **OPENMP** Podjąłem się problemu zrównoleglenia symulowanego wyżarzania, dla problemu komiwojażera w wariancie z grafem pełnym nieskierowanym. Algorytm był testowany na instancjach dostępnych na tsplib (http://elib.zib.de/pub/mp-testdata/tsp/tsplib/tsp/)
+ 
+  * **CUDA** Projekt z CUDA obejmuje zrównoleglenie wyrównywania histogramów z maską.Piksele objęte maską są ignorowane przez całe przetwarzanie. Projekt został zrealizowany przy użyciu Pythona3 z biblioteką Numba(https://numba.readthedocs.io/en/stable/cuda/index.html)
+
+== Słowa kluczowe: ==
+  * OpenMP
+  * CUDA 
+  * Numba
+
+----
+
+==== Opis problemu ====
+  * **OPENMP** Samo wyżarzanie jest heurystyką bardzo prostą. Algorytm wykonuje się w pętli gdzie iteratorem jest temperatura T. W każdej iteracji generowane jest nowe rozwiązanie, które przyjmujemy jako aktualne jeśli jest lepsze. Jeśli rozwiązanie jest gorsze, nadal możemy je przyjąć - decyzja o przyjęciu gorszego rozwiązania opiera się na prawdopodobieństwie, które jest tym wyższe im wyższa jest temperatura. Dzięki możliwości przyjęcia gorszego rozwiązania, symulowane wyżarzanie ma możliwość wyjść z lokalnych minimów/maksimów. 
+
+
+  * **CUDA** Wyrównywanie histogramu, generalnie rzecz biorąc polega na "rozciągnięciu" histogramu, co spowoduje zwiększenie kontrastu na zdjęciu. Nie każdy rozkład kolorów nadaje się do rozciągania, stąd implementacja w tym projekcie pozwala(a w zasadzie zmusza) podać maskę do funkcji, a wszystkie piskele objęte maską są ignorowane przez cały proces. Python jest językiem wolnym. Biblioteka Numba pozwala nam kompilować kod(kompilacja JiT) jak również używać API CUDA. Warto zaznaczyć, że biblioteka jest stosunkowo mało rozwinięta(w momencie pisania tego sprawozdania jest w wersji 0.55.2). Składnia funkcji, która docelowo ma zostać skompilowana jest **podzbiorem** składni pythona - jest pozbawiona elementów typowo "pythonowych" takich jak list comprehension. Istotny jest też fakt, że o ile python typowany jest dynamicznie, to numba już nie - podczas pisania projektu zdarzało mi się, że kod przestał działać, tylko dlatego, że integery miały inny rozmiar.
+
+==== Opis algorytmu sekwencyjnego ====
+
+
+  * **OPENMP**
+  * Dane: pliki w formacie txt
+  * **Symulowane Wyżarzanie** - **UWAGA** Wenętrzna pętla nie jest potrzebna ani jakkolwiek sensowna - służy do późniejszego podziału pracy przy openMP
+
+<code c++>
+STEPS = jakaś stała wartość
+aktualne_rozwiązanie = zainicjujAlgorytmemZachłannym()
+for (int temperatura = 1000;temperatura>0.001;temperatura*=0.99)
+{
+ for (int i =0;i< STEPS;i++) {
+  Wylosuj dwa wierzchołki
+  odwróć fragment trasy pomiędzy nimi
+  if (nowe rozwiązanie jest lepsze) 
+      {
+        przyjmij jako aktualne rozwiązanie
+      }
+  else{
+      if ( exp ( ( f_celu_aktualnego - f_celu_nowego) / temperature) > (float)rand() / RAND_MAX)
+ 	   {
+            przyjmij jako aktualne rozwiązanie				
+ 	   } 
+      } 
+ }
+}
+return f_celu_aktualnego rozwiązania
+
+</code>
+
+  * **CUDA**
+  *  Dane: dwie macierze numpy - obrazek i maska. Dopuszcza się trzeci argument - ilość stopni szarośći z domyślną wartością 256
+  * Metoda: 
+Metoda została zaczerpnięta z wikipedii(https://en.wikipedia.org/wiki/Histogram_equalization#Implementation)
+ - Zliczenie wystąpień każdego stopnia
+ - Zbudowanie skumulowanej funkcji rozkładu
+ - Wyznaczenie transformacji h
+ - Nadpisanie wartości w pierwotnej macierzy  
+Kod jest na tyle krótki, że wrzucę całą funkcję
+<code python>
+def sequential(pixelMatrix,mask=None,grayLevels = 256) -> np.ndarray:
+    H,W = pixelMatrix.shape
+    assert mask is None or mask.shape==pixelMatrix.shape,"Invalid mask size"
+    size = H*W
+    occurencies = [0.0 for _ in range(grayLevels)]
+    for row_id,row in enumerate(pixelMatrix):
+        for pixel_id,pixel in enumerate(row):
+            if mask is None or mask[row_id][pixel_id]==0:
+                occurencies[pixel]+=1
+    cdf = [int(sum(occurencies[:i+1])) for i in range(grayLevels)]
+    cdfmin = next((x for x in cdf if x),-1)
+    h = [round((cdf[v]-cdfmin)/(size-cdfmin) * (grayLevels-1)) for v in range(grayLevels)]
+    for row_id,row in enumerate(pixelMatrix):
+        for pixel_id,pixel in enumerate(row):
+            if mask is None or mask[row_id][pixel_id]==0:
+                pixelMatrix[row_id][pixel_id] = h[pixel]
+    return pixelMatrix
+</code>
+  
+  
+
+==== Opis algorytmu równoległego ====
+
+  * **OPENMP**
+  * Dane: Jak wcześniej - txt z punktami
+  * **Ilość iteracji w wewnętrznej pętli jest równa STEPS/ILOŚĆ WĄTKÓW**
+  * Metoda:
+ {{mermaid-diagram-20220527182901.png}}
+
+  * Skalowalność: Generalnie rzecz biorąc, dołożenie kolejnych fizycznych procesorów ma sens w kontekście szybkości - program w zasadzie osiągał najlepsze wyniki, gdy openmp tworzyło więcej wątków niż fizycznie ma moja platforma, jednakże z racji tego, że każda instancja wyżarzania ma wtedy mniej kroków - to kompletnie sie to nie opłaca patrząc na jakość rozwiązania. 
+  * Schemat strategii dzielenia się pracą: Każdy wątek relizuje mniejsze wyżarzanie niezależnie (pętla wewnętrzna ma ilość iteracji STEPS/Ilość wątków)
+  * Schemat dekompozycji i agregacji strumieni danych : Każdy wątek losuje pierwszą ścieżkę, a następnie po wyjśćiu z omp parallel wybierana jest najlepsza wartość.
+
+
+==== Kody programów ====
+  * Link do repozytorium: https://github.com/MichalKwarta/TSP-parallel-SA (zawiera równiez projekt z CUDA)
+  * Kompilacja: Do repozytorium dołączony jest makefile, jednakże do testów wszystkie kody były kompilowane z poziomem optymalizacji O3.
+  * Kod CUDA dla numby, jest zbyt rozległy żeby go tutaj wklejać, z tego powodu, że każdy etap algorytmu jest osobnym kernelem. Jednak wydaje mi się, że należy skomentować co robic cuda.grid(n) - zwraca globalny indeks wątku, jeśli uzywamy 2 wymiarowego grida, to cuda.grid(2) zwróci pozycję w gridzie.  Przesyłanie danych z hosta to device można robić manualnie, jednak nie jest koniecznie - numba wypisze warning, że może to skutkować narzutem czasowym. W drugą stronę jednak odbywa się "samo" - numba nie oferuje funckji do transferu z gpu do cpu.
+
+
+
+
+==== Testy programów i profilowanie aplikacji ====
+ **Platforma testowa** 
+
+  * Intel I5-8250u 4 rdzenie, 8 wątków cpuinfo (https://pastebin.com/H9UaGbm4)
+  * 16GB pamięci RAM  meminfo (https://pastebin.com/FChJSbw7)
+  * GPU Nvidia geforce mx150
+
+
+ ** INFORMACJA** 
+Numba używa JiT, a więc pierwsze uruchomienie funkcji trwa znacznie dłużej ze względu na czas potrzebny na kompilację. Prezentowane wyniki są średnimi z 20 pomiarów, natomiast dla numby z 19 - pierwszy pomiar został usunięty. W razie potrzeby kod użyty do przeprowadzenia testów i wygenerowania wykresów jest dostępny w repozytorium razem z już wygenerowanymi wynikami w pliku json.
+
+
+==== Pomiary czasu ====
+ * **OPENMP**
+ * Dummy10 jest sztucznie wygenerowaną instancją, która miała na celu sprawdzić, jak zachowuje się kod w przypadku bardzo małej instancji.
+
+
+
+ {{dummy10.png}}
+ {{krob150.png}}
+ {{berlin52.png}}
+
+Jak widać na wykresach, koszt zrównoleglenia okazał się duży. Dopiero przy 4 wątkach można mówić o zysku(generalnie 4, instancja dummy10, jest wyjątkiem od reguły). Widać również, że powyżej 32 wątków zrównoleglanie przestaje się opłacać pod kątem czasu.
+**Informacja** Testy przeprowadzono dla większej ilości instancji, a ich wyniki są zawarte w pliku json w repozytorium. Plik ten zawiera czasy dla 20 uruchomień każdej instancji w każdym wariancie.
+
+
+
+
+ * **CUDA**
+ * Tytuł pliku informuje o rozmiarze obrazka w pikselach. Obrazki są dostępne w repozytorium
+
+^ plik ^ sekwencyjnie ^ cuda ^ przyspieszenie(ile razy) ^			
+|182x182.png|0.12040|0.002053|58.7|
+|264x300.png|0.26085|0.004000|65.2|
+|600x400.png|0.80845|0.008684|93.1|
+|2000x924.png|6.61840|0.016105|410.9|
+|3000x3000.png|31.39295|0.046684|672.5|
+
+
+Z racji na ogromną różnicę czasów, wykres z porównaniem wydaje się nie mieć sensu, stąd zamiast tego pokazuję wykres przyspieszenia
+
+{{cuda_speedup.png}}
+
+
+
+ 
+
+
+==== Podsumowanie ====
+
+
+-----

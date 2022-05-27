@@ -1,11 +1,8 @@
-import random
 from numba import cuda
-import matplotlib.pyplot as plt
 from PIL import Image
 import numpy as np
 import numba as nb
 from numba import cuda
-import sys
 import time
 
 
@@ -18,11 +15,6 @@ def generate_dummy_mask(matrix:np.ndarray,threshold = 200):
         for pixel_id,pixel in enumerate(row):
             mask[row_id][pixel_id] = pixel>threshold
     return mask
-
-
-
-
-
 
 
 @cuda.jit(fastmath = True)

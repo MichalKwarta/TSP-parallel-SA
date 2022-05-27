@@ -20,17 +20,13 @@ def sequential(pixelMatrix,mask=None,grayLevels = 256) -> np.ndarray:
         for pixel_id,pixel in enumerate(row):
             if mask is None or mask[row_id][pixel_id]==0:
                 occurencies[pixel]+=1
-
     cdf = [int(sum(occurencies[:i+1])) for i in range(grayLevels)]
     cdfmin = next((x for x in cdf if x),-1)
-
     h = [round((cdf[v]-cdfmin)/(size-cdfmin) * (grayLevels-1)) for v in range(grayLevels)]
-
     for row_id,row in enumerate(pixelMatrix):
         for pixel_id,pixel in enumerate(row):
             if mask is None or mask[row_id][pixel_id]==0:
                 pixelMatrix[row_id][pixel_id] = h[pixel]
-
     return pixelMatrix
     
 
