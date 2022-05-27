@@ -6,13 +6,11 @@
 #include <math.h>
 #include <ctime>
 #include <omp.h>
-#include <limits>
 #include <numeric>
 
 
 float SA::parallelApply()
 {
-	float MAX_FLOAT = std::numeric_limits<float>::max();
 	std::vector<int> current(this->size);
 
 	for (int i = 0; i < this->size; i++)
