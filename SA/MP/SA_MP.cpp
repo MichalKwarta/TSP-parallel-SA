@@ -91,6 +91,7 @@ float SA::parallelApply()
 
 			
 		}
+		
 			workersPaths[threadID] = current;
 			workersCosts[threadID] = currentCost;
 			workersBest[threadID] = bestCost;
