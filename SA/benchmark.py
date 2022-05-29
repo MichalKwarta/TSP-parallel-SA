@@ -19,14 +19,16 @@ def run_Parallel(filename:str,workers:int,iters= 10)->list[Tuple[float,float]]:
 
 WORKERS_CONFIG = [2**x for x in range(8)]
 iteration_limit = 20
+data = {}
+for file in os.listdir(os.getcwd()+'/data'):
+    print(file)
+    current_file_data = {'seq': run_SEQ("data/"+file, iteration_limit)}
+    for workers_count in WORKERS_CONFIG:    
+        print(workers_count)
+        key = f'parallel_{workers_count}'
+        current_file_data[key] = run_Parallel("data/"+file, workers_count, iteration_limit)
+    data[file] = current_file_data
 
-current_file_data = {'seq': run_SEQ("data/berlin52.txt", iteration_limit)}
-for workers_count in WORKERS_CONFIG:    
-    print(workers_count)
-    key = f'parallel_{workers_count}'
-    current_file_data[key] = run_Parallel("data/berlin52.txt", workers_count, iteration_limit)
 
-
-data = {'berlin52.txt': current_file_data}
-with open('berlin.json','w+') as f:
+with open('results.json','w+') as f:
     json.dump(data,f,indent=6)

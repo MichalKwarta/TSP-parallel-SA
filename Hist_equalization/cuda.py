@@ -27,7 +27,7 @@ def countOccurencies(pixelsMatrix,occurencies,mask):
     cuda.atomic.add(occurencies,pixelsMatrix[x][y],1)
 
 @cuda.jit(fastmath = True)
-def calcCDF(occurencies_d,cdf):  # sourcery skip: sum-comprehension
+def calcCDF(occurencies_d,cdf): 
     acc = 0
     for i in range(cuda.grid(1)+1):
         acc+=occurencies_d[i]

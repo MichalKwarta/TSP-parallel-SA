@@ -39,16 +39,17 @@ float SA::parallelApply()
 	#pragma omp parallel private(current,currentCost,firstToSwap, secondToSwap, next, nextCost) firstprivate(matrix)
 		{
 		int threadID = omp_get_thread_num();
-		std::random_shuffle(workersPaths[threadID].begin(), workersPaths[threadID].end());
+		current = workersPaths[threadID];
+		currentCost = workersCosts[threadID];
+		bestCost = workersBest[threadID];
+		std::random_shuffle(current.begin(), current.end());
 
 	for (temperature = initialTemperature; temperature >= TEMP_LIMIT; temperature *= coolingRate)
 	{
 			
 
 
-			current = workersPaths[threadID];
-			currentCost = workersCosts[threadID];
-			bestCost = workersBest[threadID];
+			
 			#pragma omp for schedule(dynamic) nowait
 			for (int i = 0; i < STEPS; i++)
 			{
@@ -88,11 +89,11 @@ float SA::parallelApply()
 				}
 			}
 
+			
+		}
 			workersPaths[threadID] = current;
 			workersCosts[threadID] = currentCost;
 			workersBest[threadID] = bestCost;
-		}
-
 
 	}
 	// for (int i = 0; i < WORKERS; i++)
