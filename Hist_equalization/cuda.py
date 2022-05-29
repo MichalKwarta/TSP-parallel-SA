@@ -113,4 +113,3 @@ def benchmark(file,iters):
         end = time.time()
         times.append(round(end-start,3))
     return times
-    
