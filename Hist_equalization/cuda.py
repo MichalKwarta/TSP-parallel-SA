@@ -22,7 +22,7 @@ def countOccurencies(pixelsMatrix,occurencies,mask):
     x,y = cuda.grid(2)
     if x>=pixelsMatrix.shape[0] or y>=pixelsMatrix.shape[1]:
         return
-    if mask[x][y] == 1:
+    if mask[x][y] == 0:
         return
     cuda.atomic.add(occurencies,pixelsMatrix[x][y],1)
 
@@ -42,7 +42,6 @@ def calcH(h,cdf_d,cdfmin_d,size_d,grayLevels_d):
     result = round(nominator/denominator*multiplier)
 
     h[cuda.grid(1)] = result
-    # print("XD")
 
 
 
@@ -52,12 +51,15 @@ def changeOriginalValues(h_d,pixelsMatrix,mask):
     x,y = cuda.grid(2)
     if x>=pixelsMatrix.shape[0] or y>=pixelsMatrix.shape[1]:
         return
-    if mask[x][y] == 1:
-        return
-    pixelsMatrix[x][y] = nb.int32( h_d[pixelsMatrix[x][y]] )
+    if mask[x][y] != 0:
+        pixelsMatrix[x][y] = nb.int32( h_d[pixelsMatrix[x][y]] )
+    else:
+        pixelsMatrix[x][y] = 0
 
 
-
+@cuda.reduce
+def sum_reduce(a,b):
+    return a+b
             
         
 
@@ -80,18 +82,17 @@ def parallel(pixelsMatrix,mask,grayLevels = 256):
     blockspergrid = (grayLevels + (threadsperblock - 1)) // threadsperblock
     calcCDF[threadsperblock,blockspergrid](occurencies_d,cdf_d)
 
-    del occurencies_d
 
     cdfmin = next((x for x in cdf_d if x),-1)
 
     h = np.zeros(grayLevels,np.int32)
     h_d = cuda.to_device(h)
-    
-
-    calcH[threadsperblock,blockspergrid](h_d,cdf_d,nb.int32(cdfmin),nb.int32(H*W),nb.int32(grayLevels))
+    pixelsInMask =nb.int32(sum_reduce(occurencies_d))
+    cuda.synchronize()
+    calcH[threadsperblock,blockspergrid](h_d,cdf_d,nb.int32(cdfmin),pixelsInMask,nb.int32(grayLevels))
+    del occurencies_d
     del cdfmin
     del cdf_d
-
     changeOriginalValues[griddim,blockdim](h_d,pixelsMatrix_d,mask_d)
     
     del h_d

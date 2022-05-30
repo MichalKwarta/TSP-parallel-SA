@@ -5,29 +5,25 @@ import numba as nb
 
 
 
-
-
-
-def sequential(pixelsMatrix,mask,grayLevels = 256) -> np.ndarray:
-    H,W = pixelsMatrix.shape
-    assert  mask.shape==pixelsMatrix.shape,"Invalid mask size"
-    size = H*W
+def sequential(pixelsMatrix,mask,grayLevels=256):
     occurencies = [0.0 for _ in range(grayLevels)]
+    pixels_in_mask_count = 0
     for row_id,row in enumerate(pixelsMatrix):
         for pixel_id,pixel in enumerate(row):
-            if  mask[row_id][pixel_id]==1:
-                occurencies[pixel]+=1
+            if  mask[row_id][pixel_id]!=0:
+                occurencies[pixel]+=1 
+                pixels_in_mask_count+=1 
 
-    cdf = [int(sum(occurencies[:i+1])) for i in range(grayLevels)]
-    cdfmin = next((x for x in cdf if x),-1)
-
-    h = [round((cdf[v]-cdfmin)/(size-cdfmin) * (grayLevels-1)) for v in range(grayLevels)]
-
+    cdf = [sum(occurencies[:i+1]) for i in range(grayLevels)]
+    cdfmin = next((x for x in cdf if x),-1) 
+    h = [round((cdf[v]-cdfmin)/(pixels_in_mask_count-cdfmin) * (grayLevels-1)) for v in range(grayLevels)] 
+    print(h)
     for row_id,row in enumerate(pixelsMatrix):
         for pixel_id,pixel in enumerate(row):
-            if  mask[row_id][pixel_id]==1:
+            if  mask[row_id][pixel_id] != 0: #piksel w masce nie jest czarny, wstawiam wartość z transformacji h
                 pixelsMatrix[row_id][pixel_id] = h[pixel]
-
+            else: #piksel jest czarny w masce, więc wstawiam czarny kolor 
+                pixelsMatrix[row_id][pixel_id] = 0
     return pixelsMatrix
 
 @nb.jit(fastmath=True,nopython=True)
